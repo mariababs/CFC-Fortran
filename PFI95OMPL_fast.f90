@@ -1085,11 +1085,11 @@ PROGRAM ParabolaFlow
 
 !	put in a negative sign if the number is <0
 
-3	if (n .lt. 0 .and. kfnb .eq. 1) return
-	if (n .lt. 0) string(kfnb-1)='-'
-	rc=0
+! 3	if (n .lt. 0 .and. kfnb .eq. 1) return
+! 	if (n .lt. 0) string(kfnb-1)='-'
+! 	rc=0
 
-	return
+3 return
 
 	end
 
