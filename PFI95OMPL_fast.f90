@@ -92,14 +92,14 @@ PROGRAM ParabolaFlow
 
 	character(len = 20) form, form1
 
-	character(len=45) data,stat,title,filename,index2,line,pfile, &
+	character(len=45) data,filename,index2,pfile, &
 	outfile,STRNG,index3,string,getlength
-	integer i,j,k,l,m,n,o,Nx,My,Ot,KPsi,index,kerr,kosc,report, Iter, &
-	LL, length, TT, yy, psave,tic, ct, rcc, flag, IBL,ia,ib, totrow
-	double precision Xmin, Xmax, Ymin, Ymax, xi, Umax, Re, C, &
+	integer i,j,k,o,Nx,My,Ot,KPsi,index,kerr,kosc,report, Iter, &
+	LL, length, TT, yy, psave,tic, ct, rcc, flag, IBL,ia,ib
+	double precision Xmin, Xmax, Ymin, Ymax, Umax, Re, C, &
 	dx,dx2,dxx,dy,dy2,dyy,dt,Kappa2,KappaA,Rc,Cx,Cx2,Cy,Cy2,d6, &
 	alphaX,alphaY,alpha,Tol,OmTol,PsiTol, &
-	Amp,pi,Lambda,freq,yhalf,t,c0,amewa,f,A,minu,maxu,minv,maxv, &
+	pi,freq,t,c0,amewa,f,A,minu,maxu,minv,maxv, &
 	currentminu,currentmaxu,currentminv,currentmaxv
 
 !	Parameters to be adjusted
@@ -113,7 +113,6 @@ PROGRAM ParabolaFlow
 	u(:,:),v(:,:),Psi0(:,:),DM(:,:),DM2(:,:), &
 	OutDP(:)
      	double precision, allocatable, target :: Omega(:,:),Omega0(:,:)
-     	double precision, pointer :: Ompnt(:)
 	integer, allocatable :: OutIN(:)
 
 !	User Input Parameters
@@ -398,7 +397,7 @@ PROGRAM ParabolaFlow
 		read *,IBL
 		print *,'Input a new Tolerance value equal or less than ',OutDP(7)
 		read *,Tol
-1020		print *,'What value of time step (dt) would you like to use?'
+		print *,'What value of time step (dt) would you like to use?'
 		read *,dt
 
 		elseif(index3.eq.'n') then
@@ -915,9 +914,9 @@ PROGRAM ParabolaFlow
 !	Psi0		Previous Psi Matrix Values
 !************************************************************************
 	subroutine PsiCalc(Nx,My,Kappa2,KappaA,dxx,Psi,Omega,kPsi,DM2,Tol)
-	integer Nx,My,Ot,i,j,kPsi,n,m
+	integer Nx,My,i,j,kPsi,n,m
 	double precision Omega(Nx+2,My+2),Psi(Nx+2,My+2),Psi0(Nx+2,My+2), &
-	Kappa2,KappaA,dxx,Tol,PsiTol,Psi1m,Psi0m,x(Nx+2),y(My+2), &
+	Kappa2,KappaA,dxx,Tol,PsiTol,Psi1m,Psi0m, &
 	DM2(Nx+2,My+2)
 
 
@@ -959,7 +958,7 @@ PROGRAM ParabolaFlow
 !$OMP END DO
 !$OMP END PARALLEL
 
-90	PsiTol = abs(Psi1m)
+	PsiTol = abs(Psi1m)
 	goto 10
 
 	endif
