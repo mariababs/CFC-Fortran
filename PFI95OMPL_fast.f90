@@ -100,6 +100,7 @@ PROGRAM ParabolaFlow
 	dx,dx2,dxx,dy,dy2,dyy,dt,Kappa2,KappaA,Rc,Cx,Cx2,Cy,Cy2,d6, &
 	alphaX,alphaY,alpha,Tol,OmTol,PsiTol, &
 	pi,freq,t,c0,amewa,f,A,minu,maxu,minv,maxv, &
+	BCoeff, CCoeff, &
 	currentminu,currentmaxu,currentminv,currentmaxv
 
 !	Parameters to be adjusted
@@ -252,9 +253,7 @@ PROGRAM ParabolaFlow
 			Rc = Re*dx
 
 			Cx = dt/dx
-			CX2 = .5d0*Cx
 			Cy = dt/dy
-			Cy2 = .5d0*Cy
 
 			if (Cx.gt.Cy) then
 				C = Cx
@@ -262,9 +261,9 @@ PROGRAM ParabolaFlow
 				C = Cy
 			endif
 
-			alphaX = dt/(dxx*Re)
-			alphaY = dt/(dyy*Re)
-			alpha = 2.0d0*alphaX + 2.0d0*alphaY
+			alpha = dt/Re
+			BCoeff = (10*dyy - 2*dxx) / (dxx+dyy)
+			CCoeff = (10*dxx - 2*dyy) / (dxx+dyy)
 
 			print *,'The Courant Number C =',C,' Must be less than 1'
 			print *,''
@@ -471,9 +470,7 @@ PROGRAM ParabolaFlow
 			Rc = Re*dx
 
 			Cx = dt/dx
-			CX2 = .5d0*Cx
 			Cy = dt/dy
-			Cy2 = .5d0*Cy
 
 			if (Cx.gt.Cy) then
 				C = Cx
@@ -481,10 +478,9 @@ PROGRAM ParabolaFlow
 				C = Cy
 			endif
 
-			alphaX = dt/(dxx*Re)
-			alphaY = dt/(dyy*Re)
-			alpha = 2.0d0*alphaX + 2.0d0*alphaY
-
+			alpha = dt/Re
+			BCoeff = (10*dyy - 2*dxx) / (dxx+dyy)
+			CCoeff = (10*dxx - 2*dyy) / (dxx+dyy)
 
 
 
@@ -608,8 +604,8 @@ PROGRAM ParabolaFlow
 !	Omega,Psi, and Velocity Calculations
 !***************************************************
 
-	call OmegaCalc(Nx,My,Cx2,Cy2,alpha,alphaX,alphaY,Omega, &
-	Omega0,u,v,DM,DM2)
+	call OmegaCalc(Nx,My,alpha,Omega, &
+	Omega0,u,v,DM,DM2, Cx, Cy, BCoeff, CCoeff)
 	call PsiCalc(Nx,My,Kappa2,KappaA,dxx,Psi,Omega,kPsi,DM2,Tol)
 
 	t = k*dt
@@ -879,26 +875,63 @@ PROGRAM ParabolaFlow
 !
 !
 !**********************************************************************
-	subroutine OmegaCalc(Nx,My,Cx2,Cy2,alpha,alphaX,alphaY,Omega, &
-	Omega0,u,v,DM,DM2)
+	subroutine OmegaCalc(Nx,My,alpha,Omega, &
+	Omega0,u,v,DM,DM2, Cx, Cy, BCoeff, CCoeff)
 	integer Nx,My,i,j
 	double precision Omega(Nx+2,My+2),U(Nx+2,My+2),v(Nx+2,My+2), &
-	Omega0(Nx+2,My+2),Cx2,Cy2,alpha,alphaX,alphaY, &
-	DM(Nx+2,My+2),DM2(Nx+2,My+2)
+	Omega0(Nx+2,My+2),alpha, &
+	Compositeu(Nx+2, My+2), &
+	Compositev(Nx+2, My+2), &
+	DM(Nx+2,My+2),DM2(Nx+2,My+2), &
+	Cx, Cy, BCoeff, CCoeff
 
 !$OMP PARALLEL
 !$OMP DO
+
+	do i = 1, Nx+2
+		do j = 1, My+2
+			Compositeu(i,j) = Omega0(i,j) * u(i,j) * DM(i,j)
+			Compositev(i,j) = Omega0(i,j) * v(i,j) * DM(i,j)
+		end do
+    end do
+
+!$OMP END DO
+
+!$OMP BARRIER
+
+!$OMP DO
+
 	do 80 i = 2,Nx+1
 		do 90 j = 2,My+1
+	Omega(i,j) = Omega0(i,j) + &
+	alpha/DM2(i,j) * (Omega0(i-1, j-1) + CCoeff*Omega0(i,j-1) + Omega0(i+1, j-1) + &
+	BCoeff*Omega0(i-1,j) - 20*Omega0(i,j) + BCoeff*Omega0(i+1,j) + &
+	Omega0(i-1, j+1) + CCoeff*Omega0(i, j+1) + Omega0(i+1,j+1))
+	
+	if ((i.gt.2).and.(i.lt.(Nx+1))) then
+		Omega(i,j) = Omega(i,j) + -Cx/DM2(i,j) * (Compositeu(i-2,j) - 8*Compositeu(i-1,j) + &
+		8*Compositeu(i+1,j) - Compositeu(i+2,j)) / 12.0
+	else if (i.eq.2) then
+		Omega(i,j) = Omega(i,j) -Cx/DM2(i,j) * (-1.0/4*Compositeu(i-1,j) - 5.0/6*Compositeu(i,j) + 3.0/2*Compositeu(i+1,j) - &
+		1.0/2*Compositeu(i+2,j) + 1.0/12*Compositeu(i+3,j)) / 12
+	else if (i.eq.(Nx+1)) then
+		Omega(i,j) = Omega(i,j) -Cx/DM2(i,j) * (1.0/4*Compositeu(i+1,j) + 5.0/6*Compositeu(i,j) - 3.0/2*Compositeu(i-1,j) + &
+		1.0/2*Compositeu(i-2,j) - 1.0/12*Compositeu(i-3,j)) / 12
+	end if
 
-	Omega(i,j) = Omega0(i,j)*(1-alpha/DM2(i,j)) + &
-	Omega0(i+1,j)*(-Cx2*u(i+1,j)*DM(i+1,j) + alphaX)/DM2(i,j) + &
-	Omega0(i-1,j)*( Cx2*u(i-1,j)*DM(i-1,j) + alphaX)/DM2(i,j) + &
-	Omega0(i,j+1)*(-Cy2*v(i,j+1)*DM(i,j+1) + alphaY)/DM2(i,j) + &
-	Omega0(i,j-1)*( Cy2*v(i,j-1)*DM(i,j-1) + alphaY)/DM2(i,j)
+	if ((j.gt.2).and.(j.lt.(My+1))) then
+		Omega(i,j) = Omega(i,j) -Cy/DM2(i,j) * (Compositev(i,j-2) - 8*Compositev(i,j-1) + 8*Compositev(i,j+1) - Compositev(i,j+2)) / 12.0
+	else if (j.eq.2) then
+		Omega(i,j) = Omega(i,j) -Cx/DM2(i,j) * (-1.0/4*Compositev(i,j-1) - 5.0/6*Compositev(i,j) + 3.0/2*Compositev(i,j+1) - &
+		1.0/2*Compositev(i,j+2) + 1.0/12*Compositev(i,j+3)) / 12
+	else if (j.eq.(My+1)) then
+		Omega(i,j) = Omega(i,j) -Cx/DM2(i,j) * (1.0/4*Compositev(i,j+1) + 5.0/6*Compositev(i,j) - 3.0/2*Compositev(i,j-1) + &
+		1.0/2*Compositev(i,j-2) - 1.0/12*Compositev(i,j-3)) / 12
+	end if
 
 90		continue
 80	continue
+
 !$OMP END DO
 !$OMP END PARALLEL
 
