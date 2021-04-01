@@ -1006,10 +1006,9 @@ PROGRAM ParabolaFlow
         do 40 i = 2,Nx+1
         do 50 j = My+1,2,-1
 
-        Psi(i,j) = 20*(dxx+dyy)*Omega(i,j) + &
-        (-BCoeff*(Psi0(i+1,j) + Psi0(i-1,j))) + &
-        (-CCoeff*(Psi0(i,j+1) + Psi0(i,j-1))) + &
-        (-(Psi0(i+1,j+1)+Psi0(i-1,j-1)+Psi0(i+1,j-1)+Psi0(i-1,j+1)))
+        Psi(i,j) = ((dxx*dyy)/(dxx+dyy))*(8*(dxx+dyy)*Omega(i,j) + &
+        (Psi0(i+1,j) + Psi0(i-1,j)) + &
+        (Psi0(i,j+1) + Psi0(i,j-1))) 
 
         if (abs(Psi(i,j)-Psi0(i,j)) .gt. Psi1m) then
             Psi1m = abs(Psi(i,j)-Psi0(i,j))
