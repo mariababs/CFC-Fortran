@@ -1,20 +1,31 @@
-from os import times
 import numpy as np
 import itertools as it
 from matplotlib import pyplot as plt
 import numba
 from numba import njit
+import datetime
+import logging
+import time
 
-with open("testout", "r") as f:
-    data = f.readlines()
-    odata = data[:401]
-    pdata = data[401 : 401 * 2]
-    udata = data[401 * 2 : 401 * 3]
-    vdata = data[401 * 3 : 401 * 4]
+# with open("testout", "r") as f:
+#     data = f.readlines()
+#     odata = data[:801]
+#     pdata = data[801 : 801 * 2]
+#     udata = data[801 * 2 : 801 * 3]
+#     vdata = data[801 * 3 : 801 * 4]
 
 
-testout = np.fromstring("".join(odata), dtype=np.float, sep=" ")
-testout = np.reshape(testout, (401, 201)).T
+# testout = np.fromstring("".join(odata), dtype=np.float, sep=" ")
+# testout = np.reshape(testout, (801, 401)).T
+
+# Administrative setup
+logging.basicConfig(
+    filename="runs.log", level=logging.INFO, format=logging.BASIC_FORMAT, filemode="w"
+)
+logger = logging.Logger(__name__, level=logging.INFO)
+logger.addHandler(logging.StreamHandler())
+logger.addHandler(logging.FileHandler(filename="runs.log", mode="w"))
+
 
 # Read inputs
 
@@ -51,11 +62,11 @@ if False:
 else:
     Nx = 199
     My = 399
-    Re = 700
-    timesteps = 10000
+    Re = 1600
+    timesteps = 250_000
     report_timesteps = 50
-    a_tilde = 0
-    dt = 1e-4
+    a_tilde = 1.5
+    dt = 0.00035
     tolerance_level = 1e-5
     BCs = 20
     output_file_name = "testout"
@@ -85,9 +96,6 @@ DM2 = np.square(DM)
 # Initialize key simulation variables
 V = -(yv - 1) / DM
 U = (xv + a_tilde) / DM
-
-U_history = np.zeros((*U.shape, timesteps // report_timesteps))
-V_history = np.zeros((*V.shape, timesteps // report_timesteps))
 
 Psi = (xv + a_tilde) * (yv - 1)
 
@@ -141,7 +149,9 @@ def omega_calc(Nx, My, Cx2, Cy2, alpha, alphaX, alphaY, Omega, Omega0, U, V, DM,
 @njit(parallel=True)
 def psi_calc(Nx, My, Kappa2, KappaA, dxx, Psi, Omega, DM2, tolerance_level):
     psitol = 1
+    kpsi = 0
     while psitol > tolerance_level:
+        kpsi += 1
         Psi0 = (
             Psi.copy()
         )  # Copying in psi actually increases the MSE compared to the fortran solver?
@@ -154,6 +164,7 @@ def psi_calc(Nx, My, Kappa2, KappaA, dxx, Psi, Omega, DM2, tolerance_level):
                     + Kappa2 * (Psi0[i, j + 1] + Psi0[i, j - 1])
                 )
         psitol = np.max(np.abs(Psi - Psi0))
+    return kpsi
 
 
 @njit()
@@ -196,11 +207,11 @@ def side_boundaries(Nx, My, a_tilde, DM, U, V, Psi, Omega):
 
 
 @njit(parallel=True)
-def velocity_calculations(Nx, My, dx2, dy2, U, V, DM):
+def velocity_calculations(Nx, My, dx2, dy2, U, V, DM, Psi):
     for i in numba.prange(1, Nx + 1):
         for j in numba.prange(1, My + 1):
-            u_calc(Nx, My, i, j, dy2, Psi, U, DM)
-            v_calc(Nx, My, i, j, dx2, Psi, V, DM)
+            U[i, j] = (Psi[i, j + 1] - Psi[i, j - 1]) / (dy2) / DM[i, j]
+            V[i, j] = -(Psi[i + 1, j] - Psi[i - 1, j]) / (dx2) / DM[i, j]
 
 
 @njit(parallel=True)
@@ -225,10 +236,9 @@ def run_iteration(
     Psi,
     tolerance_level,
 ):
-    Omega0 = Omega.copy()
 
     omega_calc(Nx, My, Cx2, Cy2, alpha, alphaX, alphaY, Omega, Omega0, U, V, DM, DM2)
-    psi_calc(Nx, My, Kappa2, KappaA, dxx, Psi, Omega, DM2, tolerance_level)
+    kpsi = psi_calc(Nx, My, Kappa2, KappaA, dxx, Psi, Omega, DM2, tolerance_level)
 
     # Boundary conditions
     # Lower
@@ -249,16 +259,39 @@ def run_iteration(
     side_boundaries(Nx, My, a_tilde, DM, U, V, Psi, Omega)
 
     # Velocity calculations
-    velocity_calculations(Nx, My, dx2, dy2, U, V, DM)
+    velocity_calculations(Nx, My, dx2, dy2, U, V, DM, Psi)
 
     # Omtol
     # print(np.max(np.abs(Omega - Omega0)))
+    return kpsi
+
+
+@njit()
+def total_velocity(U, V):
+    return np.sqrt(np.square(U) + np.square(V))
+
+
+def state_to_image(xv, yv, U, V, iteration):
+    real_x = 0.5 * (np.square(xv) - np.square(yv))
+    real_y = xv * yv
+    vel = total_velocity(U, V)
+    fig, ax = plt.subplots()
+    cs = ax.contourf(real_x, real_y, vel, 300)
+    ax.set_xlim([-2, 16])
+    ax.set_ylim([-4, 12])
+    fig.colorbar(cs, ax=ax)
+    plt.savefig(f"VizOut/flow{iteration:07}.png")
+    plt.close()
+    del fig
 
 
 # Loop and continually calculate U,V,Omega,Psi
 Omega0 = Omega.copy()
+start_time = time.time()
 for iteration in range(timesteps):
-    run_iteration(
+    Omega0 = Omega.copy()
+    Psi0 = Psi.copy()
+    kpsi = run_iteration(
         Nx,
         My,
         Cx2,
@@ -279,9 +312,20 @@ for iteration in range(timesteps):
         Psi,
         tolerance_level,
     )
+    omtol = np.max(np.abs(Omega - Omega0))
+    psitol = np.max(np.abs(Psi - Psi0))
 
-print(np.mean(np.square(Omega - testout)))
+    if not iteration % 3000:
+        current_time = time.time()
+        iteration_rate = (current_time - start_time) / (iteration + 1)
+        logger.info(
+            f"{iteration:04} {kpsi:04} {omtol:e} {psitol:e} {iteration:04} {datetime.datetime.today()} {(current_time-start_time):.2f}s {iteration_rate:.4f}s/it {(timesteps-iteration)*iteration_rate/60:.0f}m to completion"
+        )
+        state_to_image(xv, yv, U, V, iteration)
 
+# print(np.mean(np.square(Omega - testout)))
+# print(np.mean(np.abs(Omega - testout)))
+# print(np.max(np.abs(Omega - testout)))
 
 # plotting logic
 if False:
@@ -289,10 +333,10 @@ if False:
     real_y = xv * yv
     total_vel = np.sqrt(np.square(U) + np.square(V))
 
-    for iteration in range(0, timesteps, timesteps // report_timesteps):
-        fig, (ax1, ax2) = plt.subplots(2, 1)
-        ax1.contourf(real_x, real_y, total_vel, np.linspace(0, 3, 100))
-        ax2.contourf(total_vel, np.linspace(0, 3, 100))
-        plt.savefig(f"VizOut/flow{iteration:04}.png")
-        plt.close()
-        del fig, ax1, ax2
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+    ax1.contourf(Omega[:, :10], np.linspace(0, 3, 100))
+    ax2.contourf(testout[:, :10], np.linspace(0, 3, 100))
+    ax3.contourf(np.abs(Omega[:, :10] - testout[:, :10]), np.linspace(0, 3, 100))
+    plt.savefig(f"VizOut/flow.png")
+    plt.close()
+    del fig, ax1, ax2
