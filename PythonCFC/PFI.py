@@ -84,7 +84,7 @@ y = np.linspace(Ymin, Ymax, My + 2, dtype=np.double)
 
 dx = (Xmax - Xmin) / (Nx + 1)
 dy = (Ymax - Ymin) / (My + 1)
-dxx = dx ** 3
+dxx = dx ** 2
 dyy = dy ** 2
 dx2 = 2 * dx
 dy2 = 2 * dy
