@@ -1,6 +1,6 @@
 PROGRAM ParabolaFlow
-!******************************************************************************
-!******************************************************************************
+!*******************************************************************
+!*******************************************************************
 !	This program solves the Vorticity-Streamline equations for the flow of
 !	an incompressible fluid around a canonic parabola at various modified
 !	Reynolds Numbers and Circulation paramters with or without a synthetic
@@ -15,12 +15,12 @@ PROGRAM ParabolaFlow
 !	Craig Hoffstein - Added synthetic jet functionality, user defined
 !		parameters, and variable mesh sizing
 !       David McWilliams - Added synthetic jet functionality
-!******************************************************************************
-!******************************************************************************
+!*******************************************************************
+!*******************************************************************
 
-!******************************************************************************
+!*******************************************************************
 !	OUTPUT FILE INDEX
-!******************************************************************************
+!*******************************************************************
 
 !	Omega		(Matrix of vorticity)
 
@@ -31,7 +31,7 @@ PROGRAM ParabolaFlow
 !	V		(Matrix of Y velocities)
 
 !	Integer Variables (OutIN)
-!******************************************************************************
+!*******************************************************************
 !   1.	Nx+2		(Total X direction points)
 !   2.	My+2		(Total Y direction points)
 !   3.	k		(Number of timesteps)
@@ -42,7 +42,7 @@ PROGRAM ParabolaFlow
 
 
 !	Double Precision Variables (OutDP)
-!******************************************************************************
+!*******************************************************************
 !   1.	Re		(Reynolds number)
 !   2.	Omtol		(Max change in omega per iteration)
 !   3.	PsiTol		(Max change in psi per iteration)
@@ -62,7 +62,7 @@ PROGRAM ParabolaFlow
 
 
 !	Assign all variables
-!******************************************************************************
+!***********************************************************************
 !	i,j,k,l,m,n,o	Counting Variables
 !	Nx,My		Number of points in the X and Y directions
 !	dx,dy		Grid spacing in X and Y directions
@@ -87,7 +87,7 @@ PROGRAM ParabolaFlow
 
 !	10-999		Loop designations
 !	1000-9999	File Designations
-!******************************************************************************
+!*******************************************************************
 	implicit none
 
 	character(len = 20) form, form1
@@ -104,12 +104,12 @@ PROGRAM ParabolaFlow
 	currentminu,currentmaxu,currentminv,currentmaxv
 
 !	Parameters to be adjusted
-!******************************************************************************
+!*******************************************************************
 	parameter (Xmin=-20, Xmax=20, Ymin=1, Ymax=11)
 	parameter (pi = 3.14159265358979d0, Umax = 1)
 
 !	Preallocated arrays
-!******************************************************************************
+!*******************************************************************
 	double precision, allocatable :: x(:),y(:),Psi(:,:), &
 	u(:,:),v(:,:),Psi0(:,:),DM(:,:),DM2(:,:), &
 	OutDP(:)
@@ -117,7 +117,7 @@ PROGRAM ParabolaFlow
 	integer, allocatable :: OutIN(:)
 
 !	User Input Parameters
-!******************************************************************************
+!*******************************************************************
 
 1000	print *,' '
 	print *,'Welcome to Parabola Flow Interactive'
@@ -253,7 +253,9 @@ PROGRAM ParabolaFlow
 			Rc = Re*dx
 
 			Cx = dt/dx
+			CX2 = .5d0*Cx
 			Cy = dt/dy
+			Cy2 = .5d0*Cy
 
 			if (Cx.gt.Cy) then
 				C = Cx
@@ -261,9 +263,9 @@ PROGRAM ParabolaFlow
 				C = Cy
 			endif
 
-			alpha = dt/Re
-			BCoeff = (10*dyy - 2*dxx) / (dxx+dyy)
-			CCoeff = (10*dxx - 2*dyy) / (dxx+dyy)
+			alphaX = dt/(dxx*Re)
+			alphaY = dt/(dyy*Re)
+			alpha = 2.0d0*alphaX + 2.0d0*alphaY
 
 			print *,'The Courant Number C =',C,' Must be less than 1'
 			print *,''
@@ -470,7 +472,9 @@ PROGRAM ParabolaFlow
 			Rc = Re*dx
 
 			Cx = dt/dx
+			CX2 = .5d0*Cx
 			Cy = dt/dy
+			Cy2 = .5d0*Cy
 
 			if (Cx.gt.Cy) then
 				C = Cx
@@ -478,9 +482,9 @@ PROGRAM ParabolaFlow
 				C = Cy
 			endif
 
-			alpha = dt/Re
-			BCoeff = (10*dyy - 2*dxx) / (dxx+dyy)
-			CCoeff = (10*dxx - 2*dyy) / (dxx+dyy)
+			alphaX = dt/(dxx*Re)
+			alphaY = dt/(dyy*Re)
+			alpha = 2.0d0*alphaX + 2.0d0*alphaY
 
 
 
@@ -534,11 +538,11 @@ PROGRAM ParabolaFlow
 
 
 
-!******************************************************************************
-!******************************************************************************
+!*******************************************************************
+!*******************************************************************
 !Set up the Initial Conditions
-!******************************************************************************
-!******************************************************************************
+!*******************************************************************
+!*******************************************************************
 
 !Generate the y velocity component matrix v
 !*************************************************
@@ -580,11 +584,11 @@ PROGRAM ParabolaFlow
 	call FDATE(STRNG)
 	print*,'Flow-field finished initializing at ',STRNG
 
-!****************************************************************************
-!****************************************************************************
+!*******************************************************************
+!*******************************************************************
 !	Perform the Numerical Calculations for each time step k
-!****************************************************************************
-!****************************************************************************
+!*******************************************************************
+!*******************************************************************
 	k = 0
 	kerr = 1
 6000	continue
@@ -604,8 +608,7 @@ PROGRAM ParabolaFlow
 !	Omega,Psi, and Velocity Calculations
 !***************************************************
 
-	call OmegaCalc(Nx,My,alpha,Omega, &
-	Omega0,u,v,DM,DM2, Cx, Cy, BCoeff, CCoeff)
+	call OmegaCalc(Nx,My,Cx2,Cy2,alpha,alphaX,alphaY,Omega,Omega0,u,v,DM,DM2)
 	call PsiCalc(Nx,My,Kappa2,KappaA,dxx,Psi,Omega,kPsi,DM2,Tol)
 
 	t = k*dt
@@ -676,13 +679,14 @@ PROGRAM ParabolaFlow
 
 87	continue
 
+
 !	Side BCs
 !******************************************************
 
 	i=1
 	do 88 j = 2,My+1
 		If(j.gt.IBL) go to 90
-                Omega(i,j) = Omega(i+1,j)
+		Omega(i,j) = Omega(i+1,j)
 		Psi(i,j) = Psi(i+1,j)
 		u(i,j) = u(i+1,j)
 		v(i,j) = v(i+1,j)
@@ -693,6 +697,7 @@ PROGRAM ParabolaFlow
 		u(i,j) = (x(i)+A)/DM(i,j)
 		v(i,j) =-(y(j)-1)/DM(i,j)
 88	continue
+
 
 	i=Nx+2
 	do 89 j = 2,My+1
@@ -749,13 +754,13 @@ PROGRAM ParabolaFlow
 !$OMP END DO
 !$OMP END PARALLEL
 
-!**********************************************************************
+!*******************************************************************
 !	Output iterations and tolerances
-!**********************************************************************
+!*******************************************************************
 
 
 !	Modifies filename for IDW
-!**********************************************************************
+!*******************************************************************
 	tic=tic+1
 	if (tic.eq.psave) then
 		if(k.ne.Ot) then
@@ -786,7 +791,7 @@ PROGRAM ParabolaFlow
 
 
 !	print*,'OmTol=',OmTol,'PsiTol =', PsiTol
-!**********************************************************************
+!*******************************************************************
 
 
 	if (k.lt.Ot) then
@@ -804,7 +809,7 @@ PROGRAM ParabolaFlow
 
 
 !	Write results to file
-!**********************************************************************
+!*******************************************************************
 
 4000	open(unit=2,file=outfile,status='new')
 
@@ -861,91 +866,53 @@ PROGRAM ParabolaFlow
 
 
 !	End of Program
-!**********************************************************************
+!*******************************************************************
 
 5000	END
 
 
 
-!**********************************************************************
+!*******************************************************************
 !	Finite difference approximation for vorticity
-!**********************************************************************
+!*******************************************************************
 !
 !
 !
 !
-!**********************************************************************
-	subroutine OmegaCalc(Nx,My,alpha,Omega, &
-	Omega0,u,v,DM,DM2, Cx, Cy, BCoeff, CCoeff)
+!*******************************************************************
+	subroutine OmegaCalc(Nx,My,Cx2,Cy2,alpha,alphaX,alphaY,Omega,Omega0,u,v,DM,DM2)
 	integer Nx,My,i,j
 	double precision Omega(Nx+2,My+2),U(Nx+2,My+2),v(Nx+2,My+2), &
-	Omega0(Nx+2,My+2),alpha, &
-	Compositeu(Nx+2, My+2), &
-	Compositev(Nx+2, My+2), &
-	DM(Nx+2,My+2),DM2(Nx+2,My+2), &
-	Cx, Cy, BCoeff, CCoeff
+		Omega0(Nx+2,My+2),Cx2,Cy2,alpha,alphaX,alphaY, &
+		DM(Nx+2,My+2),DM2(Nx+2,My+2)
 
-!$OMP PARALLEL
-!$OMP DO
+	!$OMP PARALLEL
+	!$OMP DO
+		do 80 i = 2,Nx+1
+			do 90 j = 2,My+1
 
-	do i = 1, Nx+2
-		do j = 1, My+2
-			Compositeu(i,j) = Omega0(i,j) * u(i,j) * DM(i,j)
-			Compositev(i,j) = Omega0(i,j) * v(i,j) * DM(i,j)
-		end do
-    end do
+		Omega(i,j) = Omega0(i,j)*(1-alpha/DM2(i,j)) + &
+			Omega0(i+1,j)*(-Cx2*u(i+1,j)*DM(i+1,j) + alphaX)/DM2(i,j) + &
+			Omega0(i-1,j)*( Cx2*u(i-1,j)*DM(i-1,j) + alphaX)/DM2(i,j) + &
+			Omega0(i,j+1)*(-Cy2*v(i,j+1)*DM(i,j+1) + alphaY)/DM2(i,j) + &
+			Omega0(i,j-1)*( Cy2*v(i,j-1)*DM(i,j-1) + alphaY)/DM2(i,j)
 
-!$OMP END DO
-
-!$OMP BARRIER
-
-!$OMP DO
-
-	do 80 i = 2,Nx+1
-		do 90 j = 2,My+1
-	Omega(i,j) = Omega0(i,j) + &
-	alpha/DM2(i,j) * (Omega0(i-1, j-1) + CCoeff*Omega0(i,j-1) + Omega0(i+1, j-1) + &
-	BCoeff*Omega0(i-1,j) - 20*Omega0(i,j) + BCoeff*Omega0(i+1,j) + &
-	Omega0(i-1, j+1) + CCoeff*Omega0(i, j+1) + Omega0(i+1,j+1))
-	
-	if ((i.gt.2).and.(i.lt.(Nx+1))) then
-		Omega(i,j) = Omega(i,j) + -Cx/DM2(i,j) * (Compositeu(i-2,j) - 8*Compositeu(i-1,j) + &
-		8*Compositeu(i+1,j) - Compositeu(i+2,j)) / 12.0
-	else if (i.eq.2) then
-		Omega(i,j) = Omega(i,j) -Cx/DM2(i,j) * (-1.0/4*Compositeu(i-1,j) - 5.0/6*Compositeu(i,j) + 3.0/2*Compositeu(i+1,j) - &
-		1.0/2*Compositeu(i+2,j) + 1.0/12*Compositeu(i+3,j)) / 12
-	else if (i.eq.(Nx+1)) then
-		Omega(i,j) = Omega(i,j) -Cx/DM2(i,j) * (1.0/4*Compositeu(i+1,j) + 5.0/6*Compositeu(i,j) - 3.0/2*Compositeu(i-1,j) + &
-		1.0/2*Compositeu(i-2,j) - 1.0/12*Compositeu(i-3,j)) / 12
-	end if
-
-	if ((j.gt.2).and.(j.lt.(My+1))) then
-		Omega(i,j) = Omega(i,j) -Cy/DM2(i,j) * (Compositev(i,j-2) - 8*Compositev(i,j-1) + 8*Compositev(i,j+1) - Compositev(i,j+2)) / 12.0
-	else if (j.eq.2) then
-		Omega(i,j) = Omega(i,j) -Cx/DM2(i,j) * (-1.0/4*Compositev(i,j-1) - 5.0/6*Compositev(i,j) + 3.0/2*Compositev(i,j+1) - &
-		1.0/2*Compositev(i,j+2) + 1.0/12*Compositev(i,j+3)) / 12
-	else if (j.eq.(My+1)) then
-		Omega(i,j) = Omega(i,j) -Cx/DM2(i,j) * (1.0/4*Compositev(i,j+1) + 5.0/6*Compositev(i,j) - 3.0/2*Compositev(i,j-1) + &
-		1.0/2*Compositev(i,j-2) - 1.0/12*Compositev(i,j-3)) / 12
-	end if
-
-90		continue
-80	continue
-
-!$OMP END DO
-!$OMP END PARALLEL
+	90		continue
+	80	continue
+	!$OMP END DO
+	!$OMP END PARALLEL
 
 	end
 
 
-!************************************************************************
+!*******************************************************************
 !	Iterative Stream Function Routine
-!************************************************************************
+!*******************************************************************
 !	Tol 		Tolerance level to cease iterations
 !	PsiTol		Calculated difference in Psi values per iteration
 !	Psi1m,Psi0m	Maximum single value of the previous Psi matrix
 !	Psi0		Previous Psi Matrix Values
-!************************************************************************
+!*******************************************************************
 	subroutine PsiCalc(Nx,My,Kappa2,KappaA,dxx,Psi,Omega,kPsi,DM2,Tol)
 	integer Nx,My,i,j,kPsi,n,m
 	double precision Omega(Nx+2,My+2),Psi(Nx+2,My+2),Psi0(Nx+2,My+2), &
@@ -998,9 +965,9 @@ PROGRAM ParabolaFlow
 
 	end
 
-!**********************************************************************
+!*******************************************************************
 !	Finite difference approximation for u velocities
-!**********************************************************************
+!*******************************************************************
 	subroutine UCalc(Nx,My,i,j,dy2,Psi,u,DM)
 	integer Nx,My,i,j
 	double precision Psi(Nx+2,My+2),u(Nx+2,My+2)
@@ -1010,9 +977,9 @@ PROGRAM ParabolaFlow
 
 	end
 
-!**********************************************************************
+!*******************************************************************
 !	Finite difference approximation for v velocities
-!**********************************************************************
+!*******************************************************************
 	subroutine VCalc(Nx,My,i,j,dx2,Psi,v,DM)
 	integer Nx,My,i,j
 	double precision Psi(Nx+2,My+2),v(Nx+2,My+2)
@@ -1022,9 +989,9 @@ PROGRAM ParabolaFlow
 
 	end
 
-!**********************************************************************
+!*******************************************************************
 !	Linspace Subroutine
-!**********************************************************************
+!*******************************************************************
 
 	subroutine linspace(min,max,N,x,dx)
 	integer N, i
@@ -1041,9 +1008,9 @@ PROGRAM ParabolaFlow
 
 	end
 
-!**********************************************************************
+!*******************************************************************
 ! Generate the Zeros Matrix
-!**********************************************************************
+!*******************************************************************
 
 	subroutine ZEROS(N,M,O,x)
 	integer i,j,N,M,O
@@ -1062,7 +1029,7 @@ PROGRAM ParabolaFlow
 
 !	String Length Reading Subroutine for Incremental-Data-Writer (IDW)
 !	Code adapted from Michael Kupferschmid
-!**********************************************************************
+!*******************************************************************
 
 	FUNCTION length(line,q)
 	integer q, aa
@@ -1079,7 +1046,7 @@ PROGRAM ParabolaFlow
 
 !	Converts count to string for IDW
 !	Code adapted from Michael Kupferschmid
-!**********************************************************************
+!*******************************************************************
 
 	subroutine btd(ct, string, ls, rc)
 	character(len=1) string(LS)
