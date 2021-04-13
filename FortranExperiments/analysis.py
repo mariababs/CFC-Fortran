@@ -96,9 +96,9 @@ def plot_simulation_results(
         ax.set_ylabel("Simulation Time")
 
     ax1.legend(simulation_log_file_names)
-    ax2.legend(simulation_log_file_names)
-    ax3.legend(simulation_log_file_names)
-    ax4.legend(simulation_log_file_names)
+    # ax2.legend(simulation_log_file_names)
+    # ax3.legend(simulation_log_file_names)
+    # ax4.legend(simulation_log_file_names)
 
     if save_as is None:
         plt.show()
