@@ -7,17 +7,6 @@ import datetime
 import logging
 import time
 
-# with open("testout", "r") as f:
-#     data = f.readlines()
-#     odata = data[:801]
-#     pdata = data[801 : 801 * 2]
-#     udata = data[801 * 2 : 801 * 3]
-#     vdata = data[801 * 3 : 801 * 4]
-
-
-# testout = np.fromstring("".join(odata), dtype=np.float, sep=" ")
-# testout = np.reshape(testout, (801, 401)).T
-
 # Administrative setup
 logging.basicConfig(
     filename="runs.log", level=logging.INFO, format=logging.BASIC_FORMAT, filemode="w"
@@ -318,8 +307,6 @@ def run_iteration(
     # Velocity calculations
     velocity_calculations(Nx, My, dx2, dy2, U, V, DM, Psi)
 
-    # Omtol
-    # print(np.max(np.abs(Omega - Omega0)))
     return kpsi
 
 
@@ -382,21 +369,3 @@ for iteration in range(timesteps):
             f"{iteration:04} {kpsi:04} {omtol:e} {psitol:e} {iteration:04} {datetime.datetime.today()} {(current_time-start_time):.2f}s {iteration_rate:.4f}s/it {(timesteps-iteration)*iteration_rate/60:.0f}m to completion"
         )
         state_to_image(xv, yv, U, V, iteration)
-
-# print(np.mean(np.square(Omega - testout)))
-# print(np.mean(np.abs(Omega - testout)))
-# print(np.max(np.abs(Omega - testout)))
-
-# plotting logic
-if False:
-    real_x = 0.5 * (np.square(xv) - np.square(yv))
-    real_y = xv * yv
-    total_vel = np.sqrt(np.square(U) + np.square(V))
-
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
-    ax1.contourf(Omega[:, :10], np.linspace(0, 3, 100))
-    ax2.contourf(testout[:, :10], np.linspace(0, 3, 100))
-    ax3.contourf(np.abs(Omega[:, :10] - testout[:, :10]), np.linspace(0, 3, 100))
-    plt.savefig(f"VizOut/flow.png")
-    plt.close()
-    del fig, ax1, ax2
