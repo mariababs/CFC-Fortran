@@ -71,6 +71,11 @@ else:
     BCs = 20
     output_file_name = "testout"
     iterations_between_writes = -1
+    enable_jet = True
+    ia = 120
+    ib = 130
+    c0 = 0.01
+    freq = 0.06
 
 
 # Set up initial conditions
@@ -215,6 +220,60 @@ def velocity_calculations(Nx, My, dx2, dy2, U, V, DM, Psi):
 
 
 @njit(parallel=True)
+def no_jet_upper_lower_boundaries(Nx, My, Psi, Omega, U, V, dyy, DM):
+    # Lower
+    d6 = np.square(x) + np.square(y[0])
+
+    Psi[:, 0] = 0
+    Omega[:, 0] = (7.0 * Psi[:, 0] - 8.0 * Psi[:, 1] + Psi[:, 2]) / (2.0 * dyy) / d6
+    U[:, 0] = 0
+    V[:, 0] = 0
+
+    # Upper
+    Omega[:, -1] = 0
+    Psi[:, -1] = (x + a_tilde) * (y[-1] - 1)
+    U[:, -1] = (x + a_tilde) / DM[:, -1]
+    V[:, -1] = -(y[-1] - 1) / DM[:, -1]
+
+
+@njit()
+def jet_upper_lower_boundaries(
+    Nx, My, Psi, Omega, U, V, dyy, DM, ia, ib, c0, freq, t, xv, yv
+):
+    amewa = (ia - ((Nx + 1) / 2 + 1)) * dx
+    f = np.sin(2 * np.pi * freq * t)
+
+    # Lower
+    d6 = np.square(x) + np.square(y[0])
+
+    Psi[:ia, 0] = 0
+
+    Psi[ia : ib + 1, 0] = (
+        -c0
+        * (
+            0.0
+            - 0.5 * amewa * np.sqrt(amewa ** 2 + 1)
+            - 0.5 * np.sinh(amewa)
+            + 0.5 * xv[ia : ib + 1, 0] * np.sqrt(xv[ia : ib + 1, 0] ** 2 + 1)
+            + 0.5 * np.sinh(xv[ia : ib + 1, 0])
+        )
+    ) * f
+
+    Psi[ib + 1 :, 0] = Psi[ib, 0]
+
+    Omega[:, 0] = (7.0 * Psi[:, 0] - 8.0 * Psi[:, 1] + Psi[:, 2]) / (2.0 * dyy) / d6
+    U[:, 0] = 0
+    V[:, 0] = 0
+    V[ia + 1 : ib] = c0 * f
+
+    # Upper
+    Omega[:, -1] = 0
+    Psi[:, -1] = (x + a_tilde) * (y[-1] - 1)
+    U[:, -1] = (x + a_tilde) / DM[:, -1]
+    V[:, -1] = -(y[-1] - 1) / DM[:, -1]
+
+
+@njit()
 def run_iteration(
     Nx,
     My,
@@ -235,25 +294,23 @@ def run_iteration(
     dyy,
     Psi,
     tolerance_level,
+    iteration,
+    xv,
+    yv,
 ):
+    t = iteration * dt
 
     omega_calc(Nx, My, Cx2, Cy2, alpha, alphaX, alphaY, Omega, Omega0, U, V, DM, DM2)
     kpsi = psi_calc(Nx, My, Kappa2, KappaA, dxx, Psi, Omega, DM2, tolerance_level)
 
     # Boundary conditions
-    # Lower
-    d6 = np.square(x) + np.square(y[0])
 
-    Psi[:, 0] = 0
-    Omega[:, 0] = (7.0 * Psi[:, 0] - 8.0 * Psi[:, 1] + Psi[:, 2]) / (2.0 * dyy) / d6
-    U[:, 0] = 0
-    V[:, 0] = 0
-
-    # Upper
-    Omega[:, -1] = 0
-    Psi[:, -1] = (x + a_tilde) * (y[-1] - 1)
-    U[:, -1] = (x + a_tilde) / DM[:, -1]
-    V[:, -1] = -(y[-1] - 1) / DM[:, -1]
+    if enable_jet:
+        jet_upper_lower_boundaries(
+            Nx, My, Psi, Omega, U, V, dyy, DM, ia, ib, c0, freq, t, xv, yv
+        )
+    else:
+        no_jet_upper_lower_boundaries(Nx, My, Psi, Omega, U, V, dyy, DM)
 
     # Sides
     side_boundaries(Nx, My, a_tilde, DM, U, V, Psi, Omega)
@@ -311,6 +368,9 @@ for iteration in range(timesteps):
         dyy,
         Psi,
         tolerance_level,
+        iteration,
+        xv,
+        yv,
     )
     omtol = np.max(np.abs(Omega - Omega0))
     psitol = np.max(np.abs(Psi - Psi0))
